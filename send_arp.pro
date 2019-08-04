@@ -4,6 +4,8 @@ CONFIG -= app_bundle
 CONFIG -= qt
 LIBS += -lpcap
 SOURCES += \
+        arp.cpp \
         main.cpp
 
-HEADERS +=
+HEADERS += \
+    arp.h
