@@ -26,7 +26,6 @@ int main(int argc, char** argv)
     }
 
     uint8_t attacker_mac[6];
-
     get_attacker_info(attacker_mac, dev);
 
     uint8_t sender_mac[6];
